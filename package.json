@@ -1,5 +1,5 @@
 {
-  "name": "memesearchbot",
+  "name": "memer",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -7,6 +7,10 @@
     "start": "node bot.js",
     "dev": "nodemon bot.js",
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mtwn105/memer-telegram-bot"
   },
   "keywords": [],
   "author": "",
