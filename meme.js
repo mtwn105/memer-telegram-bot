@@ -47,7 +47,7 @@ module.exports = {
         return issueSrc;
       }
     } catch (err) {
-      // console.error(err);
+      console.error(err);
       return null;
     }
   },
@@ -83,10 +83,10 @@ module.exports = {
         }
       });
 
-      // await browser.close();
+      await browser.close();
       return { image: issueSrc, id: templateId };
     } catch (err) {
-      // console.error(err);
+      console.error(err);
       return { image: null, id: null };
     }
   },
