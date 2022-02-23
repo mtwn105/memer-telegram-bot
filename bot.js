@@ -517,6 +517,14 @@ bot.on("photo", async (msg) => {
   }
 });
 
+createImageDirectory = () => {
+  if (!fs.existsSync("./images")) {
+    fs.mkdirSync("./images");
+  }
+};
+
+createImageDirectory();
+
 setInterval(() => cleanUpImages(), 1000);
 
 function cleanUpImages() {
