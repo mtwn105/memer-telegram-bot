@@ -57,7 +57,7 @@ bot.onText(/\/reset/, (msg) => {
   bot.sendMessage(msg.chat.id, "Resetted state");
 });
 
-bot.onText(/\/search/, (msg) => {
+bot.onText("/search", (msg) => {
   // chats.set(msg.chat.id, { state: "NONE" });
   bot.sendMessage(msg.chat.id, "Send search term like /search <search-term>");
 });

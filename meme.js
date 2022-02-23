@@ -5,8 +5,8 @@ module.exports = {
     try {
       const url = "https://imgflip.com/search?q=" + searchText;
 
-      // const browser = await puppeteer.launch({ args: ["--no-sandbox"] });
-      const browser = await puppeteer.launch({ headless: true });
+      const browser = await puppeteer.launch({ args: ["--no-sandbox"] });
+      // const browser = await puppeteer.launch({ headless: true });
       const page = await browser.newPage();
       await page.goto(url);
 
@@ -55,8 +55,8 @@ module.exports = {
     try {
       const url = "https://imgflip.com/search?q=" + searchText;
 
-      // const browser = await puppeteer.launch({ args: ["--no-sandbox"] });
-      const browser = await puppeteer.launch({ headless: true });
+      const browser = await puppeteer.launch({ args: ["--no-sandbox"] });
+      // const browser = await puppeteer.launch({ headless: true });
       const page = await browser.newPage();
       await page.goto(url);
 
