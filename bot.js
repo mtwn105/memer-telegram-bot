@@ -60,9 +60,7 @@ app.post(`/bot${process.env.TELEGRAM_KEY}`, (req, res) => {
 app.listen(port, () => {
   console.log(`Memer bot server is listening on ${port}`);
 
-  createImageDirectory();
-
-  setInterval(() => cleanUpImages(), 1000);
+  setInterval(() => cleanUpImages(), 300000);
 });
 
 bot.on("polling_error", (error) => {
@@ -680,12 +678,6 @@ bot.on("photo", async (msg) => {
     });
   }
 });
-
-createImageDirectory = () => {
-  if (!fs.existsSync("./images")) {
-    fs.mkdirSync("./images");
-  }
-};
 
 function cleanUpImages() {
   // Delete files which are 5 minutes old in images folder
