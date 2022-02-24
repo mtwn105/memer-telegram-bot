@@ -83,6 +83,15 @@ bot.onText(/\/start/, (msg) => {
   `
   );
   chats.set(msg.chat.id, { state: "NONE" });
+
+  // Send Logs
+  sendLogs(
+    {
+      Event: "Welcome",
+      User: msg.chat.username,
+    },
+    "memer_welcome"
+  );
 });
 
 // Reply to hey, hi, hello
@@ -99,6 +108,15 @@ bot.onText(/^hi$|^hey$|^hello$/i, (msg) => {
   `
   );
   chats.set(msg.chat.id, { state: "NONE" });
+
+  // Send Logs
+  sendLogs(
+    {
+      Event: "Welcome",
+      User: msg.chat.username,
+    },
+    "memer_welcome"
+  );
 });
 
 bot.onText(/\/reset/, (msg) => {
