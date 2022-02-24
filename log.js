@@ -12,7 +12,9 @@ module.exports = {
     };
 
     try {
-      axios.post(apiUrl, payload);
+      axios.post(apiUrl, payload).catch((err) => {
+        console.log("Error while sending log", error);
+      });
     } catch (error) {
       console.log("Error while sending log", error);
     }
