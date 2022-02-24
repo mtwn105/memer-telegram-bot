@@ -85,6 +85,22 @@ bot.onText(/\/start/, (msg) => {
   chats.set(msg.chat.id, { state: "NONE" });
 });
 
+// Reply to hey, hi, hello
+bot.onText(/^hi$|^hey$|^hello$/, (msg) => {
+  bot.sendMessage(
+    msg.chat.id,
+    `Hey there ${msg.from.first_name}, I am Memer Bot!
+
+  You can search & create memes using the following commands:
+
+  /search <search-term> - Search for a meme for a term
+  /create - Create a meme from a template or custom image
+  /reset - Reset the current state of the bot (if not responding)
+  `
+  );
+  chats.set(msg.chat.id, { state: "NONE" });
+});
+
 bot.onText(/\/reset/, (msg) => {
   chats.set(msg.chat.id, { state: "NONE" });
   bot.sendMessage(msg.chat.id, "Resetted state");
