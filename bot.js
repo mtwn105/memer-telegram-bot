@@ -86,7 +86,7 @@ bot.onText(/\/start/, (msg) => {
 });
 
 // Reply to hey, hi, hello
-bot.onText(/^hi$|^hey$|^hello$/, (msg) => {
+bot.onText(/^hi$|^hey$|^hello$/i, (msg) => {
   bot.sendMessage(
     msg.chat.id,
     `Hey there ${msg.from.first_name}, I am Memer Bot!
