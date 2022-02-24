@@ -9,6 +9,7 @@ const morgan = require("morgan");
 const helmet = require("helmet");
 
 const { fetchMeme, fetchMemeTemplate } = require("./meme");
+const { sendLogs } = require("./log");
 
 require("dotenv").config();
 
@@ -101,6 +102,16 @@ bot.onText(/\/search (.+)/, async (msg, match) => {
 
   const searchText = match[1];
 
+  // Send Logs
+  sendLogs(
+    {
+      Event: "Search Meme Request",
+      Search: searchText,
+      User: msg.chat.username,
+    },
+    "memer_search"
+  );
+
   console.log("searchText", searchText);
 
   bot.sendMessage(msg.chat.id, "Seaching meme for you...");
@@ -121,18 +132,36 @@ bot.onText(/\/search (.+)/, async (msg, match) => {
       `${msg.from.first_name}, Here is your meme 👇`
     );
     bot.sendPhoto(msg.chat.id, memeSrc);
-    // bot.removeTextListener(/(.*)/);
+
+    // Send Logs
+    sendLogs(
+      {
+        Event: "Search Meme Processed",
+        Search: searchText,
+        Status: "Success",
+        User: msg.chat.username,
+      },
+      "memer_search"
+    );
   } else {
     bot.sendMessage(
       msg.chat.id,
       "Sorry " + msg.from.first_name + ", I couldn't find a meme for you 😢"
     );
+    // Send Logs
+    sendLogs(
+      {
+        Event: "Search Meme Processed",
+        Search: searchText,
+        Status: "Error",
+        User: msg.chat.username,
+      },
+      "memer_search"
+    );
   }
 });
 
 bot.onText(/\/create/, (msg) => {
-  // bot.removeTextListener(/(.*)/);
-
   bot.sendMessage(
     msg.chat.id,
     "Choose do you want to create a meme from a template or custom image",
@@ -166,6 +195,16 @@ bot.on("callback_query", (callbackQuery) => {
   console.log(action);
 
   if (action == "TEMPLATE_TYPE") {
+    // Send Logs
+    sendLogs(
+      {
+        Event: "Create Meme Started",
+        Type: "Template",
+        User: msg.chat.username,
+      },
+      "memer_create"
+    );
+
     bot.sendMessage(
       msg.chat.id,
       "Please enter a search term to get a meme template"
@@ -190,8 +229,17 @@ bot.on("callback_query", (callbackQuery) => {
       "Oops, let's try again by entering a different search term again."
     );
     chats.set(msg.chat.id, { state: "CREATE_TEMPLATE_SEARCH" });
-    // bot.removeTextListener(/(.*)/);
   } else if (action == "CUSTOM_TYPE") {
+    // Send Logs
+    sendLogs(
+      {
+        Event: "Create Meme Started",
+        Type: "Custom",
+        User: msg.chat.username,
+      },
+      "memer_create"
+    );
+
     bot.sendMessage(
       msg.chat.id,
       "Please send me a photo to create a meme from"
@@ -243,7 +291,6 @@ bot.onText(/(.*)/, async (msg, match) => {
           ],
         },
       });
-      // bot.removeTextListener(/(.*)/);
 
       chats.set(msg.chat.id, { state: "CREATE_TEMPLATE_YES" });
     } else {
@@ -351,13 +398,35 @@ bot.onText(/(.*)/, async (msg, match) => {
           },
         }
       );
+
+      // Send Logs
+      sendLogs(
+        {
+          Event: "Create Meme Processed",
+          Status: "Success",
+          Type: "Template",
+          User: msg.chat.username,
+        },
+        "memer_create"
+      );
     } else {
       bot.sendMessage(
         msg.chat.id,
         `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
       );
-      // bot.removeTextListener(/(.*)/);
+
       chats.set(msg.chat.id, { state: "CREATE_TEMPLATE_FINISHED" });
+
+      // Send Logs
+      sendLogs(
+        {
+          Event: "Create Meme Processed",
+          Status: "Error",
+          Type: "Template",
+          User: msg.chat.username,
+        },
+        "memer_create"
+      );
     }
   } else if (
     chats.get(msg.chat.id) &&
@@ -510,10 +579,17 @@ bot.onText(/(.*)/, async (msg, match) => {
                 },
               }
             );
-            // Delete image from disk
-            // cleanUpImages(fileName, msg);
 
-            // Delete image files
+            // Send Logs
+            sendLogs(
+              {
+                Event: "Create Meme Processed",
+                Status: "Success",
+                Type: "Custom",
+                User: msg.chat.username,
+              },
+              "memer_create"
+            );
           } catch (err) {
             console.log(err);
             bot.sendMessage(
@@ -521,8 +597,17 @@ bot.onText(/(.*)/, async (msg, match) => {
               `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
             );
             chats.set(msg.chat.id, { state: "CREATE_TEMPLATE_FINISHED" });
-            // Delete image from disk
-            // cleanUpImages(fileName, msg);
+
+            // Send Logs
+            sendLogs(
+              {
+                Event: "Create Meme Processed",
+                Status: "Error",
+                Type: "Custom",
+                User: msg.chat.username,
+              },
+              "memer_create"
+            );
           }
         } else {
           bot.sendMessage(
@@ -530,8 +615,16 @@ bot.onText(/(.*)/, async (msg, match) => {
             `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
           );
           chats.set(msg.chat.id, { state: "CREATE_TEMPLATE_FINISHED" });
-          // Delete image from disk
-          // cleanUpImages(fileName, msg);
+          // Send Logs
+          sendLogs(
+            {
+              Event: "Create Meme Processed",
+              Status: "Error",
+              Type: "Custom",
+              User: msg.chat.username,
+            },
+            "memer_create"
+          );
         }
       }
     });
