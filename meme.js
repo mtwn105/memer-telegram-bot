@@ -1,12 +1,17 @@
 const puppeteer = require("puppeteer");
 
+require("dotenv").config();
+
 module.exports = {
   fetchMeme: async (searchText) => {
     try {
       const url = "https://imgflip.com/search?q=" + searchText;
 
-      const browser = await puppeteer.launch({ args: ["--no-sandbox"] });
-      // const browser = await puppeteer.launch({ headless: true });
+      const browser =
+        process.env.APP_ENVIRONMENT == "PROD"
+          ? await puppeteer.launch({ args: ["--no-sandbox"] })
+          : await puppeteer.launch({ headless: true });
+
       const page = await browser.newPage();
       await page.goto(url);
 
@@ -55,8 +60,11 @@ module.exports = {
     try {
       const url = "https://imgflip.com/search?q=" + searchText;
 
-      const browser = await puppeteer.launch({ args: ["--no-sandbox"] });
-      // const browser = await puppeteer.launch({ headless: true });
+      const browser =
+        process.env.APP_ENVIRONMENT == "PROD"
+          ? await puppeteer.launch({ args: ["--no-sandbox"] })
+          : await puppeteer.launch({ headless: true });
+
       const page = await browser.newPage();
       await page.goto(url);
 

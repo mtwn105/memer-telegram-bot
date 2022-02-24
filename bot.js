@@ -3,6 +3,10 @@ const axios = require("axios").default;
 const fs = require("fs");
 const FormData = require("form-data");
 const request = require("request");
+const express = require("express");
+const cors = require("cors");
+const morgan = require("morgan");
+const helmet = require("helmet");
 
 const { fetchMeme, fetchMemeTemplate } = require("./meme");
 
@@ -11,7 +15,7 @@ require("dotenv").config();
 const url = "https://api.imgflip.com/caption_image";
 
 // Create a bot that uses 'polling' to fetch new updates
-const bot = new TelegramBot(process.env.TELEGRAM_KEY, { polling: true });
+const bot = new TelegramBot(process.env.TELEGRAM_KEY);
 
 const chats = new Map();
 
@@ -31,6 +35,34 @@ const states = [
   "CUSTOM_IMAGE_FINISHED",
   "CUSTOM_IMAGE_ERROR",
 ];
+
+bot.setWebHook(process.env.APP_URL + "/bot" + process.env.TELEGRAM_KEY);
+
+const app = express();
+
+const port = process.env.PORT || 3000;
+
+// parse the updates to JSON
+app.use(express.json());
+
+app.use(cors());
+app.use(helmet());
+app.use(morgan("combined"));
+
+// We are receiving updates at the route below!
+app.post(`/bot${process.env.TELEGRAM_KEY}`, (req, res) => {
+  bot.processUpdate(req.body);
+  res.sendStatus(200);
+});
+
+// Start Express Server
+app.listen(port, () => {
+  console.log(`Memer bot server is listening on ${port}`);
+
+  createImageDirectory();
+
+  setInterval(() => cleanUpImages(), 1000);
+});
 
 bot.on("polling_error", (error) => {
   console.log("polling_error", error);
@@ -527,10 +559,6 @@ createImageDirectory = () => {
     fs.mkdirSync("./images");
   }
 };
-
-createImageDirectory();
-
-setInterval(() => cleanUpImages(), 1000);
 
 function cleanUpImages() {
   // Delete files which are 5 minutes old in images folder
