@@ -88,6 +88,10 @@ app.listen(port, async () => {
   setInterval(() => cleanUpImages(), 300000);
 });
 
+bot.on("error", (err) => {
+  console.log("Some error occured", err);
+});
+
 bot.onText(/\/message (.+)/, (msg, match) => {
   const message = match[1];
 
