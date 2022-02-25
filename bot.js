@@ -622,7 +622,8 @@ bot.onText(/(.*)/, async (msg, match) => {
 });
 
 bot.on("photo", async (msg) => {
-  const chatData = await client.get(msg.chat.id);
+  const chatDataString = await client.get(msg.chat.id);
+  const chatData = chatDataString ? JSON.parse(chatDataString) : null;
 
   if (chatData && chatData.state === "CREATE_CUSTOM_IMAGE_UPLOAD") {
     bot.sendMessage(msg.chat.id, "Awesome!, Looking good!");
@@ -641,7 +642,8 @@ bot.on("photo", async (msg) => {
 
 generateCustomMeme = async (msg, bottomText) => {
   try {
-    const chatData = await client.get(msg.chat.id);
+    const chatDataString = await client.get(msg.chat.id);
+    const chatData = chatDataString ? JSON.parse(chatDataString) : null;
 
     // Get image
     const image = chatData.image;
