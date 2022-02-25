@@ -19,7 +19,7 @@ let client = null;
 const url = "https://api.imgflip.com/caption_image";
 
 // Create a bot that uses 'polling' to fetch new updates
-const bot = new TelegramBot(process.env.TELEGRAM_KEY);
+const bot = new TelegramBot(process.env.TELEGRAM_KEY, { polling: false });
 
 const chats = new Map();
 
@@ -588,7 +588,9 @@ bot.onText(/(.*)/, async (msg, match) => {
 });
 
 bot.on("photo", async (msg) => {
-  if (state && state.state === "CREATE_CUSTOM_IMAGE_UPLOAD") {
+  const chatData = await client.get(msg.chat.id);
+
+  if (chatData && chatData.state === "CREATE_CUSTOM_IMAGE_UPLOAD") {
     bot.sendMessage(msg.chat.id, "Awesome!, Looking good!");
 
     bot.sendMessage(msg.chat.id, "Please send me a top text (send . to skip)");
@@ -604,8 +606,10 @@ bot.on("photo", async (msg) => {
 });
 
 generateCustomMeme = async (msg, bottomText) => {
+  const chatData = await client.get(msg.chat.id);
+
   // Get image
-  const image = state.image;
+  const image = chatData.image;
 
   // Get image file from telegram using file_id
   const imagePath = await bot.downloadFile(image, "./images");
@@ -668,7 +672,7 @@ generateCustomMeme = async (msg, bottomText) => {
               },
               params: {
                 meme: response.name,
-                top: state.topText,
+                top: chatData.topText,
                 bottom: bottomText,
               },
               responseType: "arraybuffer",
