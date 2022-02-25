@@ -60,7 +60,7 @@ app.post(`/bot${process.env.TELEGRAM_KEY}`, (req, res) => {
 });
 
 // Send a message to all people who have started the bot
-app.post(`/message`, (req, res) => {
+app.post(`/message`, async (req, res) => {
   const { token, message } = req.body;
 
   if (token !== process.env.TELEGRAM_KEY) {
@@ -102,7 +102,7 @@ bot.on("error", (err) => {
   console.log("Some error occured", err);
 });
 
-bot.onText(/\/message (.+)/, (msg, match) => {
+bot.onText(/\/message (.+)/, async (msg, match) => {
   const message = match[1];
 
   if (msg.chat.id == process.env.MY_CHAT_ID) {
