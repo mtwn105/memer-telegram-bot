@@ -74,7 +74,9 @@ app.post(`/message`, (req, res) => {
   }
 
   try {
-    const keys = await client.keys();
+    const keys = await client.keys("*");
+
+    console.log("Sending message to ", keys.length, " people");
 
     for (const chatId of keys) {
       console.log("sending msg to", chatId);
@@ -105,7 +107,9 @@ bot.onText(/\/message (.+)/, (msg, match) => {
 
   if (msg.chat.id == process.env.MY_CHAT_ID) {
     try {
-      const keys = await client.keys();
+      const keys = await client.keys("*");
+
+      console.log("Sending message to ", keys.length, " people");
 
       for (const chatId of keys) {
         console.log("sending msg to", chatId);
