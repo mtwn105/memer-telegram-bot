@@ -10,8 +10,11 @@ const helmet = require("helmet");
 
 const { fetchMeme, fetchMemeTemplate } = require("./meme");
 const { sendLogs } = require("./log");
+const { connectToRedis } = require("./redis");
 
 require("dotenv").config();
+
+let client = null;
 
 const url = "https://api.imgflip.com/caption_image";
 
@@ -79,13 +82,24 @@ app.post(`/message`, (req, res) => {
 });
 
 // Start Express Server
-app.listen(port, () => {
+app.listen(port, async () => {
   console.log(`Memer bot server is listening on ${port}`);
-
+  client = await connectToRedis();
   setInterval(() => cleanUpImages(), 300000);
 });
 
-bot.onText(/\/start/, (msg) => {
+bot.onText(/\/message (.+)/, (msg, match) => {
+  const message = match[1];
+
+  if (msg.chat.id == process.env.MY_CHAT_ID) {
+    for (const chatId of chats.keys()) {
+      console.log("sending msg to", chatId);
+      bot.sendMessage(chatId, message);
+    }
+  }
+});
+
+bot.onText(/\/start/, async (msg) => {
   bot.sendMessage(msg.chat.id, "Welcome to Memer Bot");
   bot.sendMessage(
     msg.chat.id,
@@ -98,7 +112,7 @@ bot.onText(/\/start/, (msg) => {
   /reset - Reset the current state of the bot (if not responding)
   `
   );
-  chats.set(msg.chat.id, { state: "NONE" });
+  await client.set(msg.chat.id, JSON.stringify({ state: "NONE" }));
 
   // Send Logs
   sendLogs(
@@ -111,7 +125,7 @@ bot.onText(/\/start/, (msg) => {
 });
 
 // Reply to hey, hi, hello
-bot.onText(/^hi$|^hey$|^hello$/i, (msg) => {
+bot.onText(/^hi$|^hey$|^hello$/i, async (msg) => {
   bot.sendMessage(
     msg.chat.id,
     `Hey there ${msg.from.first_name}, I am Memer Bot!
@@ -123,7 +137,11 @@ bot.onText(/^hi$|^hey$|^hello$/i, (msg) => {
   /reset - Reset the current state of the bot (if not responding)
   `
   );
-  chats.set(msg.chat.id, { state: "NONE" });
+  await client.set(msg.chat.id, JSON.stringify({ state: "NONE" }));
+
+  // const value = await client.get(msg.chat.id);
+
+  // console.log(value);
 
   // Send Logs
   sendLogs(
@@ -135,18 +153,18 @@ bot.onText(/^hi$|^hey$|^hello$/i, (msg) => {
   );
 });
 
-bot.onText(/\/reset/, (msg) => {
-  chats.set(msg.chat.id, { state: "NONE" });
+bot.onText(/\/reset/, async (msg) => {
+  await client.set(msg.chat.id, JSON.stringify({ state: "NONE" }));
   bot.sendMessage(msg.chat.id, "Resetted state");
 });
 
-bot.onText(/^\/search$/, (msg) => {
-  chats.set(msg.chat.id, { state: "NONE" });
+bot.onText(/^\/search$/, async (msg) => {
+  await client.set(msg.chat.id, JSON.stringify({ state: "NONE" }));
   bot.sendMessage(msg.chat.id, "Send search term like /search <search-term>");
 });
 
 bot.onText(/\/search (.+)/, async (msg, match) => {
-  chats.set(msg.chat.id, { state: "NONE" });
+  await client.set(msg.chat.id, JSON.stringify({ state: "NONE" }));
 
   const searchText = match[1];
 
@@ -209,8 +227,8 @@ bot.onText(/\/search (.+)/, async (msg, match) => {
   }
 });
 
-bot.onText(/\/create/, (msg) => {
-  chats.set(msg.chat.id, { state: "NONE" });
+bot.onText(/\/create/, async (msg) => {
+  await client.set(msg.chat.id, JSON.stringify({ state: "NONE" }));
 
   bot.sendMessage(
     msg.chat.id,
@@ -234,11 +252,11 @@ bot.onText(/\/create/, (msg) => {
     }
   );
 
-  chats.set(msg.chat.id, { state: "CREATE_STARTED" });
+  await client.set(msg.chat.id, JSON.stringify({ state: "CREATE_STARTED" }));
 });
 
 // Handle callback queries
-bot.on("callback_query", (callbackQuery) => {
+bot.on("callback_query", async (callbackQuery) => {
   const action = callbackQuery.data;
   const msg = callbackQuery.message;
 
@@ -260,7 +278,10 @@ bot.on("callback_query", (callbackQuery) => {
       "Please enter a search term to get a meme template"
     );
 
-    chats.set(msg.chat.id, { state: "CREATE_TEMPLATE_SEARCH" });
+    await client.set(
+      msg.chat.id,
+      JSON.stringify({ state: "CREATE_TEMPLATE_SEARCH" })
+    );
   } else if (action.includes("TEMPLATE_YES")) {
     let templateId = action.split(" ")[2];
 
@@ -269,16 +290,22 @@ bot.on("callback_query", (callbackQuery) => {
     bot.sendMessage(msg.chat.id, "Glad you liked it!");
 
     bot.sendMessage(msg.chat.id, "Please enter a top text (send . to skip)");
-    chats.set(msg.chat.id, {
-      state: "CREATE_TEMPLATE_TOP",
-      templateId: templateId,
-    });
+    await client.set(
+      msg.chat.id,
+      JSON.stringify({
+        state: "CREATE_TEMPLATE_TOP",
+        templateId: templateId,
+      })
+    );
   } else if (action == "TEMPLATE_NO") {
     bot.sendMessage(
       msg.chat.id,
       "Oops, let's try again by entering a different search term again."
     );
-    chats.set(msg.chat.id, { state: "CREATE_TEMPLATE_SEARCH" });
+    await client.set(
+      msg.chat.id,
+      JSON.stringify({ state: "CREATE_TEMPLATE_SEARCH" })
+    );
   } else if (action == "CUSTOM_TYPE") {
     // Send Logs
     sendLogs(
@@ -295,15 +322,18 @@ bot.on("callback_query", (callbackQuery) => {
       "Please send me a photo to create a meme from"
     );
 
-    chats.set(msg.chat.id, { state: "CREATE_CUSTOM_IMAGE_UPLOAD" });
+    await client.set(
+      msg.chat.id,
+      JSON.stringify({ state: "CREATE_CUSTOM_IMAGE_UPLOAD" })
+    );
   }
 });
 
 bot.onText(/(.*)/, async (msg, match) => {
-  if (
-    chats.get(msg.chat.id) &&
-    chats.get(msg.chat.id).state === "CREATE_TEMPLATE_SEARCH"
-  ) {
+  const chatDataString = await client.get(msg.chat.id);
+  const chatData = chatDataString ? JSON.parse(chatDataString) : null;
+
+  if (chatData && chatData.state === "CREATE_TEMPLATE_SEARCH") {
     const searchText = match[0];
 
     console.log("searchText", searchText);
@@ -342,7 +372,10 @@ bot.onText(/(.*)/, async (msg, match) => {
         },
       });
 
-      chats.set(msg.chat.id, { state: "CREATE_TEMPLATE_YES" });
+      await client.set(
+        msg.chat.id,
+        JSON.stringify({ state: "CREATE_TEMPLATE_YES" })
+      );
     } else {
       bot.sendMessage(
         msg.chat.id,
@@ -351,12 +384,9 @@ bot.onText(/(.*)/, async (msg, match) => {
           ", I couldn't find a meme template for you 😢. Please enter some other search term"
       );
       // bot.removeTextListener(/(.*)/);
-      // chats.set(msg.chat.id, { state: "CREATE_TEMPLATE_SEARCH" });
+      // await client.set(msg.chat.id, JSON.stringify({ state: "CREATE_TEMPLATE_SEARCH" }));
     }
-  } else if (
-    chats.get(msg.chat.id) &&
-    chats.get(msg.chat.id).state === "CREATE_TEMPLATE_TOP"
-  ) {
+  } else if (chatData && chatData.state === "CREATE_TEMPLATE_TOP") {
     const text = match[0];
 
     console.log("topText", text);
@@ -369,15 +399,15 @@ bot.onText(/(.*)/, async (msg, match) => {
     }
     bot.sendMessage(msg.chat.id, "Please enter a bottom text (send . to skip)");
 
-    chats.set(msg.chat.id, {
-      state: "CREATE_TEMPLATE_BOTTOM",
-      templateId: chats.get(msg.chat.id).templateId,
-      topText: topText,
-    });
-  } else if (
-    chats.get(msg.chat.id) &&
-    chats.get(msg.chat.id).state === "CREATE_TEMPLATE_BOTTOM"
-  ) {
+    await client.set(
+      msg.chat.id,
+      JSON.stringify({
+        state: "CREATE_TEMPLATE_BOTTOM",
+        templateId: chatData.templateId,
+        topText: topText,
+      })
+    );
+  } else if (chatData && chatData.state === "CREATE_TEMPLATE_BOTTOM") {
     const text = match[0];
 
     console.log("bottomText", text);
@@ -393,9 +423,7 @@ bot.onText(/(.*)/, async (msg, match) => {
       msg.chat.id,
       `
       Top Text is ${
-        chats.get(msg.chat.id).topText === ""
-          ? "None"
-          : chats.get(msg.chat.id).topText
+        chatData.topText === "" ? "None" : chatData.topText
       } \nBottom Text is ${bottomText === "" ? "None" : bottomText}
      `
     );
@@ -405,10 +433,10 @@ bot.onText(/(.*)/, async (msg, match) => {
       url,
       new URLSearchParams(
         {
-          template_id: chats.get(msg.chat.id).templateId,
+          template_id: chatData.templateId,
           username: process.env.IMGFLIP_USERNAME,
           password: process.env.IMGFLIP_PASSWORD,
-          text0: chats.get(msg.chat.id).topText,
+          text0: chatData.topText,
           text1: bottomText,
         },
         {
@@ -428,13 +456,16 @@ bot.onText(/(.*)/, async (msg, match) => {
       bot.sendMessage(msg.chat.id, `Here is your meme 👇`);
       bot.sendPhoto(msg.chat.id, response.data.data.url);
 
-      chats.set(msg.chat.id, { state: "CREATE_TEMPLATE_FINISHED" });
+      await client.set(
+        msg.chat.id,
+        JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
+      );
 
       // If you like it do share this bot with your friends
       // Also follow developer Amit Wani on Twitter @mtwn105
       bot.sendMessage(
         msg.chat.id,
-        "Do you like this meme? Share it with your friends and follow me @mtwn105 on Twitter for more cool bots 😉",
+        "Do you like this meme? Share it with your friends and follow me @mtwn105 on Twitter for more cool stuff 😉. If you want to support me, consider clicking the button below 👇",
         {
           reply_markup: {
             inline_keyboard: [
@@ -442,6 +473,10 @@ bot.onText(/(.*)/, async (msg, match) => {
                 {
                   text: "@mtwn105",
                   url: "https://twitter.com/mtwn105",
+                },
+                {
+                  text: "Support",
+                  url: "https://rzp.io/l/dQtgHoQ6",
                 },
               ],
             ],
@@ -465,7 +500,10 @@ bot.onText(/(.*)/, async (msg, match) => {
         `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
       );
 
-      chats.set(msg.chat.id, { state: "CREATE_TEMPLATE_FINISHED" });
+      await client.set(
+        msg.chat.id,
+        JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
+      );
 
       // Send Logs
       sendLogs(
@@ -478,10 +516,7 @@ bot.onText(/(.*)/, async (msg, match) => {
         "memer_create"
       );
     }
-  } else if (
-    chats.get(msg.chat.id) &&
-    chats.get(msg.chat.id).state === "CREATE_CUSTOM_IMAGE_TOP"
-  ) {
+  } else if (chatData && chatData.state === "CREATE_CUSTOM_IMAGE_TOP") {
     const text = match[0];
 
     console.log("topText", text);
@@ -494,15 +529,15 @@ bot.onText(/(.*)/, async (msg, match) => {
     }
     bot.sendMessage(msg.chat.id, "Please enter a bottom text (send . to skip)");
 
-    chats.set(msg.chat.id, {
-      state: "CREATE_CUSTOM_IMAGE_BOTTOM",
-      image: chats.get(msg.chat.id).image,
-      topText: topText,
-    });
-  } else if (
-    chats.get(msg.chat.id) &&
-    chats.get(msg.chat.id).state === "CREATE_CUSTOM_IMAGE_BOTTOM"
-  ) {
+    await client.set(
+      msg.chat.id,
+      JSON.stringify({
+        state: "CREATE_CUSTOM_IMAGE_BOTTOM",
+        image: chatData.image,
+        topText: topText,
+      })
+    );
+  } else if (chatData && chatData.state === "CREATE_CUSTOM_IMAGE_BOTTOM") {
     const text = match[0];
 
     console.log("bottomText", text);
@@ -518,9 +553,7 @@ bot.onText(/(.*)/, async (msg, match) => {
       msg.chat.id,
       `
       Top Text is ${
-        chats.get(msg.chat.id).topText === ""
-          ? "None"
-          : chats.get(msg.chat.id).topText
+        chatData.topText === "" ? "None" : chatData.topText
       } \nBottom Text is ${bottomText === "" ? "None" : bottomText}
      `
     );
@@ -537,7 +570,7 @@ bot.onText(/(.*)/, async (msg, match) => {
     msg.text === "hey" &&
     msg.text === "hello"
   ) {
-    // chats.set(msg.chat.id, { state: "NONE" });
+    // await client.set(msg.chat.id, JSON.stringify({ state: "NONE" }));
 
     // Tell user I can't understand this and show help
     bot.sendMessage(
@@ -555,24 +588,24 @@ bot.onText(/(.*)/, async (msg, match) => {
 });
 
 bot.on("photo", async (msg) => {
-  if (
-    chats.get(msg.chat.id) &&
-    chats.get(msg.chat.id).state === "CREATE_CUSTOM_IMAGE_UPLOAD"
-  ) {
+  if (state && state.state === "CREATE_CUSTOM_IMAGE_UPLOAD") {
     bot.sendMessage(msg.chat.id, "Awesome!, Looking good!");
 
     bot.sendMessage(msg.chat.id, "Please send me a top text (send . to skip)");
 
-    chats.set(msg.chat.id, {
-      state: "CREATE_CUSTOM_IMAGE_TOP",
-      image: msg.photo[msg.photo.length - 1].file_id,
-    });
+    await client.set(
+      msg.chat.id,
+      JSON.stringify({
+        state: "CREATE_CUSTOM_IMAGE_TOP",
+        image: msg.photo[msg.photo.length - 1].file_id,
+      })
+    );
   }
 });
 
 generateCustomMeme = async (msg, bottomText) => {
   // Get image
-  const image = chats.get(msg.chat.id).image;
+  const image = state.image;
 
   // Get image file from telegram using file_id
   const imagePath = await bot.downloadFile(image, "./images");
@@ -635,7 +668,7 @@ generateCustomMeme = async (msg, bottomText) => {
               },
               params: {
                 meme: response.name,
-                top: chats.get(msg.chat.id).topText,
+                top: state.topText,
                 bottom: bottomText,
               },
               responseType: "arraybuffer",
@@ -651,13 +684,16 @@ generateCustomMeme = async (msg, bottomText) => {
           // Send meme to user
           bot.sendMessage(msg.chat.id, `Here is your meme 👇`);
           bot.sendPhoto(msg.chat.id, `./images/meme_${fileName}`);
-          chats.set(msg.chat.id, { state: "CREATE_TEMPLATE_FINISHED" });
+          await client.set(
+            msg.chat.id,
+            JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
+          );
 
           // If you like it do share this bot with your friends
           // Also follow developer Amit Wani on Twitter @mtwn105
           bot.sendMessage(
             msg.chat.id,
-            "Do you like this meme? Share it with your friends and follow me @mtwn105 on Twitter for more cool bots 😉",
+            "Do you like this meme? Share it with your friends and follow me @mtwn105 on Twitter for more cool stuff 😉. If you want to support me, consider clicking the button below 👇",
             {
               reply_markup: {
                 inline_keyboard: [
@@ -665,6 +701,10 @@ generateCustomMeme = async (msg, bottomText) => {
                     {
                       text: "@mtwn105",
                       url: "https://twitter.com/mtwn105",
+                    },
+                    {
+                      text: "Support",
+                      url: "https://rzp.io/l/dQtgHoQ6",
                     },
                   ],
                 ],
@@ -688,7 +728,10 @@ generateCustomMeme = async (msg, bottomText) => {
             msg.chat.id,
             `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
           );
-          chats.set(msg.chat.id, { state: "CREATE_TEMPLATE_FINISHED" });
+          await client.set(
+            msg.chat.id,
+            JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
+          );
 
           // Send Logs
           sendLogs(
@@ -706,7 +749,10 @@ generateCustomMeme = async (msg, bottomText) => {
           msg.chat.id,
           `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
         );
-        chats.set(msg.chat.id, { state: "CREATE_TEMPLATE_FINISHED" });
+        await client.set(
+          msg.chat.id,
+          JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
+        );
         // Send Logs
         sendLogs(
           {

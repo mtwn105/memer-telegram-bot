@@ -27,6 +27,7 @@
     "morgan": "^1.10.0",
     "node-telegram-bot-api": "^0.56.0",
     "node-telegram-keyboard-wrapper": "^3.0.0",
+    "redis": "^4.0.4",
     "telegraf": "^3.28.0"
   },
   "devDependencies": {
