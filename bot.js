@@ -73,12 +73,20 @@ app.post(`/message`, (req, res) => {
     return;
   }
 
-  for (const chatId of chats.keys()) {
-    console.log("sending msg to", chatId);
-    bot.sendMessage(chatId, message);
-  }
+  try {
+    const keys = await client.keys();
 
-  res.status(200).send("OK");
+    for (const chatId of keys) {
+      console.log("sending msg to", chatId);
+      bot.sendMessage(chatId, message);
+    }
+
+    res.status(200).send("OK");
+  } catch (err) {
+    console.log("Error while sending message");
+    res.status(500).json(err);
+    return;
+  }
 });
 
 // Start Express Server
@@ -96,9 +104,19 @@ bot.onText(/\/message (.+)/, (msg, match) => {
   const message = match[1];
 
   if (msg.chat.id == process.env.MY_CHAT_ID) {
-    for (const chatId of chats.keys()) {
-      console.log("sending msg to", chatId);
-      bot.sendMessage(chatId, message);
+    try {
+      const keys = await client.keys();
+
+      for (const chatId of keys) {
+        console.log("sending msg to", chatId);
+        bot.sendMessage(chatId, message);
+      }
+
+      res.status(200).send("OK");
+    } catch (err) {
+      console.log("Error while sending message");
+      bot.sendMessage("Error while sending message ");
+      return;
     }
   }
 });
