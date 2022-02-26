@@ -18,8 +18,7 @@ let client = null;
 
 const url = "https://api.imgflip.com/caption_image";
 
-// Create a bot that uses 'polling' to fetch new updates
-const bot = new TelegramBot(process.env.TELEGRAM_KEY, { polling: false });
+const bot = new TelegramBot(process.env.TELEGRAM_KEY);
 
 const chats = new Map();
 
