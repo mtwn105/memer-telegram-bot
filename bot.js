@@ -111,15 +111,25 @@ bot.onText(/\/message (.+)/, async (msg, match) => {
 
       console.log("Sending message to ", keys.length, " people");
 
+      let success = 0;
+
       for (const chatId of keys) {
         console.log("sending msg to", chatId);
-        bot.sendMessage(chatId, message);
+        try {
+          bot.sendMessage(chatId, message);
+          success++;
+        } catch (err) {
+          console.log("Error while sending message", err);
+        }
       }
 
-      res.status(200).send("OK");
+      console.log(
+        "Successfully sent message to ",
+        success + "/" + keys.length + " people"
+      );
     } catch (err) {
       console.log("Error while sending message");
-      bot.sendMessage("Error while sending message ");
+      bot.sendMessage(msg.chat.id, "Error while sending message ");
       return;
     }
   }
@@ -208,22 +218,25 @@ bot.onText(/\/search (.+)/, async (msg, match) => {
 
   bot.sendMessage(msg.chat.id, "Seaching meme for you...");
 
-  let memeSrc = await fetchMeme(searchText);
+  let memeSrcs = await fetchMeme(searchText);
 
-  if (memeSrc) {
-    console.log("Got Search " + memeSrc);
-
-    if (memeSrc.substring(0, 2) === "//") {
-      memeSrc = "http://" + memeSrc.substring(2);
-    } else {
-      memeSrc = "https://imgflip.com" + memeSrc;
-    }
+  if (memeSrcs && memeSrcs.length > 0) {
+    console.log("Got Search " + memeSrcs);
 
     bot.sendMessage(
       msg.chat.id,
-      `${msg.from.first_name}, Here is your meme 👇`
+      `${msg.from.first_name}, Here are some top memes I found 👇`
     );
-    bot.sendPhoto(msg.chat.id, memeSrc);
+
+    for (let memeSrc of memeSrcs) {
+      if (memeSrc.substring(0, 2) === "//") {
+        memeSrc = "http://" + memeSrc.substring(2);
+      } else {
+        memeSrc = "https://imgflip.com" + memeSrc;
+      }
+
+      bot.sendPhoto(msg.chat.id, memeSrc);
+    }
 
     // Send Logs
     sendLogs(
@@ -659,6 +672,57 @@ bot.on("photo", async (msg) => {
         image: msg.photo[msg.photo.length - 1].file_id,
       })
     );
+  }
+});
+
+bot.on("message", async (msg) => {
+  if (
+    msg.chat.id == process.env.MY_CHAT_ID &&
+    !!msg.caption &&
+    msg.caption.includes("/message") &&
+    (!!msg.photo || !!msg.video || !!msg.animation)
+  ) {
+    console.log("Message received from my chat id");
+    console.log(msg);
+
+    try {
+      const keys = await client.keys("*");
+
+      console.log("Sending message to ", keys.length, " people");
+
+      let success = 0;
+
+      for (const chatId of keys) {
+        console.log("sending msg to", chatId);
+
+        try {
+          if (!!msg.photo) {
+            bot.sendPhoto(chatId, msg.photo[msg.photo.length - 1].file_id);
+          } else if (!!msg.video) {
+            bot.sendVideo(chatId, msg.video.file_id);
+          } else if (!!msg.animation) {
+            bot.sendAnimation(chatId, msg.animation.file_id);
+          }
+
+          success++;
+        } catch (err) {
+          console.log("Failed to send message to ", chatId);
+        }
+
+        bot.sendMessage(
+          msg.chat.id,
+          "Sent messages successfully to " +
+            success +
+            "/" +
+            keys.length +
+            " people"
+        );
+      }
+    } catch (err) {
+      console.log("Error while sending message");
+      bot.sendMessage(msg.chat.id, "Error while sending message ");
+      return;
+    }
   }
 });
 

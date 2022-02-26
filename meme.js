@@ -91,49 +91,93 @@ module.exports = {
       let $ = cheerio.load(response.data);
 
       // Find the first meme
-      const meme = $("#s-results > a:nth-child(2)");
+      // const meme = $("#s-results > a:nth-child(2)");
 
-      // If the meme exists, click it
-      if (meme && meme.attr("href")) {
-        url = baseUrl + meme.attr("href");
+      const memes = $(".clearfix");
 
-        const response = await axios.get(url);
+      console.log("Found memes: ", memes.length);
 
-        $ = cheerio.load(response.data);
+      let imageSrcs = [];
+      let top10 = 10;
 
-        const imgLink = $(
-          "#base-left > div:nth-child(1) > div.base-img-wrap-wrap > div > a"
-        );
+      for (let meme of memes) {
+        // console.log(meme);
 
-        if (imgLink && imgLink.attr("href")) {
-          console.log("meme exists");
+        try {
+          // If the meme exists, click it
+          if (meme && $(meme).attr("href") && top10 > 0) {
+            // console.log(meme);
 
-          url = baseUrl + imgLink.attr("href");
+            const memeUrl = $(meme).attr("href");
 
-          const response = await axios.get(url);
+            if (memeUrl.includes("/meme/")) {
+              url = baseUrl + $(meme).attr("href");
 
-          $ = cheerio.load(response.data);
+              const response = await axios.get(url);
 
-          const imageSrc = $("#im").attr("src");
+              $ = cheerio.load(response.data);
 
-          return imageSrc;
-        } else {
-          const templateLink = $("#base-right > div > a.meme-link");
+              const imgLink = $(
+                "#base-left > div:nth-child(1) > div.base-img-wrap-wrap > div > a"
+              );
 
-          url = baseUrl + templateLink.attr("href");
+              if (imgLink && imgLink.attr("href")) {
+                console.log("meme exists");
 
-          const response = await axios.get(url);
+                url = baseUrl + imgLink.attr("href");
 
-          $ = cheerio.load(response.data);
+                const response = await axios.get(url);
 
-          const imageSrc = $("#mtm-img").attr("src");
+                $ = cheerio.load(response.data);
 
-          return imageSrc;
+                const imageSrc = $("#im").attr("src");
+
+                imageSrcs.push(imageSrc);
+
+                top10--;
+              } else {
+                const templateLink = $("#base-right > div > a.meme-link");
+
+                console.log("meme link ", $(meme).attr("href"));
+                console.log("template link: ", templateLink.attr("href"));
+
+                url = baseUrl + templateLink.attr("href");
+
+                const response = await axios.get(url);
+
+                $ = cheerio.load(response.data);
+
+                const imageSrc = $("#mtm-img").attr("src");
+
+                imageSrcs.push(imageSrc);
+
+                top10--;
+              }
+            } else if (memeUrl.includes("/i/")) {
+              url = baseUrl + $(meme).attr("href");
+
+              const response = await axios.get(url);
+
+              $ = cheerio.load(response.data);
+
+              const imageSrc = $("#im").attr("src");
+
+              imageSrcs.push(imageSrc);
+
+              top10--;
+            } else {
+              console.log("meme does not exist");
+            }
+          }
+        } catch (err) {
+          console.log("Error fetching this meme for ", meme);
+          console.log(err);
         }
-      } else {
-        console.log("meme does not exist");
-        return null;
       }
+
+      console.log("imageSrcs: ", imageSrcs);
+
+      return imageSrcs;
     } catch (err) {
       console.error(err);
       return null;
