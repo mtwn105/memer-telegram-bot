@@ -817,6 +817,8 @@ generateCustomMeme = async (msg, bottomText) => {
     };
 
     request(options, async (error, response, body) => {
+      stream.close();
+
       if (error) {
         bot.sendMessage(
           msg.chat.id,
@@ -959,8 +961,6 @@ generateCustomMeme = async (msg, bottomText) => {
     );
 
     throw err;
-  } finally {
-    stream.close();
   }
 };
 
