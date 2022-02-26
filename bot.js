@@ -767,6 +767,8 @@ bot.on("message", async (msg) => {
 });
 
 generateCustomMeme = async (msg, bottomText) => {
+  let stream = null;
+
   try {
     const chatDataString = await client.get(msg.chat.id);
     const chatData = chatDataString ? JSON.parse(chatDataString) : null;
@@ -789,9 +791,9 @@ generateCustomMeme = async (msg, bottomText) => {
     // Write file to disk
     fs.writeFileSync(`./images/${fileName}`, file);
 
-    // file = fs.createReadStream(`./images/${fileName}`);
+    stream = fs.createReadStream(`./images/${fileName}`);
     const uploadData = new FormData();
-    uploadData.append("image", fs.createReadStream(`./images/${fileName}`));
+    uploadData.append("image", stream);
     uploadData.append("content-type", "application/octet-stream");
 
     const options = {
@@ -805,7 +807,7 @@ generateCustomMeme = async (msg, bottomText) => {
       },
       formData: {
         image: {
-          value: fs.createReadStream(`./images/${fileName}`),
+          value: stream,
           options: {
             filename: fileName,
             contentType: "application/octet-stream",
@@ -957,6 +959,8 @@ generateCustomMeme = async (msg, bottomText) => {
     );
 
     throw err;
+  } finally {
+    stream.close();
   }
 };
 
