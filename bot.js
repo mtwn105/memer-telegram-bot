@@ -324,27 +324,34 @@ bot.on("callback_query", async (callbackQuery) => {
   } else if (action.includes("TEMPLATE_YES")) {
     let templateId = action.split(" ")[2];
 
-    console.log("templateId", templateId);
+    const chatDataString = await client.get(msg.chat.id);
 
-    bot.sendMessage(msg.chat.id, "Glad you liked it!");
+    const chatData = chatDataString ? JSON.parse(chatDataString) : null;
 
-    bot.sendMessage(msg.chat.id, "Please enter a top text (send . to skip)");
-    await client.set(
-      msg.chat.id,
-      JSON.stringify({
-        state: "CREATE_TEMPLATE_TOP",
-        templateId: templateId,
-      })
-    );
-  } else if (action == "TEMPLATE_NO") {
-    bot.sendMessage(
-      msg.chat.id,
-      "Oops, let's try again by entering a different search term again."
-    );
-    await client.set(
-      msg.chat.id,
-      JSON.stringify({ state: "CREATE_TEMPLATE_SEARCH" })
-    );
+    const tempMsgMap = chatData.tempMsgMap;
+
+    if (
+      tempMsgMap &&
+      tempMsgMap.find((m) => m.templateId == templateId) &&
+      tempMsgMap.find((m) => m.templateId == templateId).messageId
+    ) {
+      console.log("templateId", templateId);
+
+      bot.sendMessage(msg.chat.id, "Great, You have a great choice!", {
+        reply_to_message_id: tempMsgMap.find((m) => m.templateId == templateId)
+          .messageId,
+      });
+
+      bot.sendMessage(msg.chat.id, "Please enter a top text (send . to skip)");
+      await client.set(
+        msg.chat.id,
+        JSON.stringify({
+          ...chatData,
+          state: "CREATE_TEMPLATE_TOP",
+          templateId: templateId,
+        })
+      );
+    }
   } else if (action == "CUSTOM_TYPE") {
     // Send Logs
     sendLogs(
@@ -380,41 +387,75 @@ bot.onText(/(.*)/, async (msg, match) => {
 
       bot.sendMessage(msg.chat.id, "Seaching meme template for you...");
 
-      let { image, id } = await fetchMemeTemplate(searchText);
+      const memeTemplates = await fetchMemeTemplate(searchText);
 
-      if (image && id) {
-        console.log("Got Search " + image);
-        if (image.substring(0, 2) === "//") {
-          image = "http://" + image.substring(2);
-        } else {
-          image = "https://imgflip.com" + image;
-        }
+      if (!!memeTemplates && memeTemplates.length > 0) {
+        bot.sendMessage(
+          msg.chat.id,
+          `${msg.from.first_name}, Here are some meme templates from which you can choose 👇`
+        );
 
         bot.sendMessage(
           msg.chat.id,
-          `${msg.from.first_name}, Here is your meme template 👇`
+          `Select any one which you want to use by clicking "Select" button below each image`
         );
-        bot.sendPhoto(msg.chat.id, image);
-        bot.sendMessage(msg.chat.id, "Do you like this one?", {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: "Yes",
-                  callback_data: "TEMPLATE_YES ID: " + id,
-                },
-                {
-                  text: "No",
-                  callback_data: "TEMPLATE_NO",
-                },
-              ],
-            ],
-          },
-        });
+
+        const tempMsgMap = [];
+
+        for (let memeTemplate of memeTemplates) {
+          let { image, id } = memeTemplate;
+
+          if (image && id) {
+            console.log("Got Search " + image);
+            if (image.substring(0, 2) === "//") {
+              image = "http://" + image.substring(2);
+            } else {
+              image = "https://imgflip.com" + image;
+            }
+
+            const message = await bot.sendPhoto(msg.chat.id, image, {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: "Select",
+                      callback_data: "TEMPLATE_YES ID: " + id,
+                    },
+                  ],
+                ],
+              },
+            });
+
+            console.log(message);
+
+            if (message)
+              tempMsgMap.push({
+                templateId: id,
+                messageId: message.message_id,
+              });
+
+            // bot.sendMessage(msg.chat.id, "Do you like this one?", {
+            //   reply_markup: {
+            //     inline_keyboard: [
+            //       [
+            //         {
+            //           text: "Yes",
+            //           callback_data: "TEMPLATE_YES ID: " + id,
+            //         },
+            //         {
+            //           text: "No",
+            //           callback_data: "TEMPLATE_NO",
+            //         },
+            //       ],
+            //     ],
+            //   },
+            // });
+          }
+        }
 
         await client.set(
           msg.chat.id,
-          JSON.stringify({ state: "CREATE_TEMPLATE_YES" })
+          JSON.stringify({ state: "CREATE_TEMPLATE_YES", tempMsgMap })
         );
       } else {
         bot.sendMessage(
