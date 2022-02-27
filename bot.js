@@ -1,4 +1,3 @@
-const TelegramBot = require("node-telegram-bot-api");
 const axios = require("axios").default;
 const fs = require("fs");
 const FormData = require("form-data");
@@ -7,39 +6,35 @@ const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
 const helmet = require("helmet");
+const TeleBot = require("telebot");
 
 const { fetchMeme, fetchMemeTemplate } = require("./meme");
 const { sendLogs } = require("./log");
 const { connectToRedis } = require("./redis");
+const { cleanUpImages } = require("./utils");
 
 require("dotenv").config();
+
+// Created bot object
+const bot = new TeleBot({
+  token: process.env.TELEGRAM_KEY, // Required. Telegram Bot API token.
+  webhook: {
+    url: process.env.APP_URL + "/bot", // HTTPS url to send updates to.
+  },
+  // allowedUpdates: [], // Optional. List the types of updates you want your bot to receive. Specify an empty list to receive all updates.
+  // usePlugins: ["askUser"], // Optional. Use user plugins from pluginFolder.
+  // pluginFolder: "../plugins/", // Optional. Plugin folder location.
+  // pluginConfig: {
+  //   // Optional. Plugin configuration.
+  //   // myPluginName: {
+  //   //   data: 'my custom value'
+  //   // }
+  // },
+});
 
 let client = null;
 
 const url = "https://api.imgflip.com/caption_image";
-
-const bot = new TelegramBot(process.env.TELEGRAM_KEY);
-
-const chats = new Map();
-
-const states = [
-  "NONE",
-  "CREATE_STARTED",
-  "CREATE_TEMPLATE_SEARCH",
-  "CREATE_TEMPLATE_YES",
-  "CREATE_TEMPLATE_NO",
-  "CREATE_TEMPLATE_TOP",
-  "CREATE_TEMPLATE_BOTTOM",
-  "CREATE_TEMPLATE_FINISHED",
-  "CREATE_TEMPLATE_ERROR",
-  "CUSTOM_IMAGE_UPLOAD",
-  "CUSTOM_IMAGE_TOP",
-  "CUSTOM_IMAGE_BOTTOM",
-  "CUSTOM_IMAGE_FINISHED",
-  "CUSTOM_IMAGE_ERROR",
-];
-
-bot.setWebHook(process.env.APP_URL + "/bot" + process.env.TELEGRAM_KEY);
 
 const app = express();
 
@@ -53,41 +48,11 @@ app.use(helmet());
 app.use(morgan("combined"));
 
 // We are receiving updates at the route below!
-app.post(`/bot${process.env.TELEGRAM_KEY}`, (req, res) => {
-  bot.processUpdate(req.body);
-  res.sendStatus(200);
-});
+app.post(`/bot/${process.env.TELEGRAM_KEY}`, (req, res) => {
+  bot.receiveUpdates([req.body]);
 
-// Send a message to all people who have started the bot
-app.post(`/message`, async (req, res) => {
-  const { token, message } = req.body;
-
-  if (token !== process.env.TELEGRAM_KEY) {
-    res.status(401).send("Unauthorized");
-    return;
-  }
-
-  if (!message || message.length == 0) {
-    res.status(400).send("Bad request");
-    return;
-  }
-
-  try {
-    const keys = await client.keys("*");
-
-    console.log("Sending message to ", keys.length, " people");
-
-    for (const chatId of keys) {
-      console.log("sending msg to", chatId);
-      bot.sendMessage(chatId, message);
-    }
-
-    res.status(200).send("OK");
-  } catch (err) {
-    console.log("Error while sending message");
-    res.status(500).json(err);
-    return;
-  }
+  // bot.receiveUpdates(req.body);
+  res.status(200).send("ok");
 });
 
 // Start Express Server
@@ -101,10 +66,15 @@ bot.on("error", (err) => {
   console.log("Some error occured", err);
 });
 
-bot.onText(/\/message (.+)/, async (msg, match) => {
-  const message = match[1];
+// Admin Message
+bot.on(/\/message (.+)/, async (msg, props) => {
+  console.log(props);
 
-  if (msg.chat.id == process.env.MY_CHAT_ID) {
+  const message = props.match[1];
+
+  if (msg.chat.id == process.env.MY_CHAT_ID && message) {
+    const text = message.substring(9);
+
     try {
       const keys = await client.keys("*");
 
@@ -115,7 +85,7 @@ bot.onText(/\/message (.+)/, async (msg, match) => {
       for (const chatId of keys) {
         console.log("sending msg to", chatId);
         try {
-          bot.sendMessage(chatId, message);
+          bot.sendMessage(chatId, text);
           success++;
         } catch (err) {
           console.log("Error while sending message", err);
@@ -126,6 +96,15 @@ bot.onText(/\/message (.+)/, async (msg, match) => {
         "Successfully sent message to ",
         success + "/" + keys.length + " people"
       );
+
+      bot.sendMessage(
+        process.env.MY_CHAT_ID,
+        "Successfully sent message to " +
+          success +
+          "/" +
+          keys.length +
+          " people"
+      );
     } catch (err) {
       console.log("Error while sending message");
       bot.sendMessage(msg.chat.id, "Error while sending message ");
@@ -134,7 +113,8 @@ bot.onText(/\/message (.+)/, async (msg, match) => {
   }
 });
 
-bot.onText(/\/start/, async (msg) => {
+// Start
+bot.on(/\/start/, async (msg) => {
   bot.sendMessage(msg.chat.id, "Welcome to Memer Bot");
   bot.sendMessage(
     msg.chat.id,
@@ -160,7 +140,7 @@ bot.onText(/\/start/, async (msg) => {
 });
 
 // Reply to hey, hi, hello
-bot.onText(/^hi$|^hey$|^hello$/i, async (msg) => {
+bot.on(/^hi$|^hey$|^hello$/i, async (msg) => {
   bot.sendMessage(
     msg.chat.id,
     `Hey there ${msg.from.first_name}, I am Memer Bot!
@@ -174,10 +154,6 @@ bot.onText(/^hi$|^hey$|^hello$/i, async (msg) => {
   );
   await client.set(msg.chat.id, JSON.stringify({ state: "NONE" }));
 
-  // const value = await client.get(msg.chat.id);
-
-  // console.log(value);
-
   // Send Logs
   sendLogs(
     {
@@ -188,84 +164,97 @@ bot.onText(/^hi$|^hey$|^hello$/i, async (msg) => {
   );
 });
 
-bot.onText(/\/reset/, async (msg) => {
+// Reset states
+bot.on(/\/reset/, async (msg) => {
   await client.set(msg.chat.id, JSON.stringify({ state: "NONE" }));
-  bot.sendMessage(msg.chat.id, "Resetted state");
+  bot.sendMessage(
+    msg.chat.id,
+    "Resetted state. Now you can try searching or creating memes again"
+  );
 });
 
-bot.onText(/^\/search$/, async (msg) => {
+// Search error
+bot.on(/^\/search$/, async (msg) => {
   await client.set(msg.chat.id, JSON.stringify({ state: "NONE" }));
   bot.sendMessage(msg.chat.id, "Send search term like /search <search-term>");
 });
 
-bot.onText(/\/search (.+)/, async (msg, match) => {
+// Search
+bot.on(/^\/search (.+)$/, async (msg, props) => {
   await client.set(msg.chat.id, JSON.stringify({ state: "NONE" }));
 
-  const searchText = match[1];
+  console.log({ props });
 
-  // Send Logs
-  sendLogs(
-    {
-      Event: "Search Meme Request",
-      Search: searchText,
-      User: msg.chat.username,
-    },
-    "memer_search"
-  );
+  const text = props.match[0];
 
-  console.log("searchText", searchText);
+  if (text) {
+    const searchText = text.substring(7);
 
-  bot.sendMessage(msg.chat.id, "Seaching meme for you...");
-
-  let memeSrcs = await fetchMeme(searchText);
-
-  if (memeSrcs && memeSrcs.length > 0) {
-    console.log("Got Search " + memeSrcs);
-
-    bot.sendMessage(
-      msg.chat.id,
-      `${msg.from.first_name}, Here are some top memes I found 👇`
+    // Send Logs
+    sendLogs(
+      {
+        Event: "Search Meme Request",
+        Search: searchText,
+        User: msg.chat.username,
+      },
+      "memer_search"
     );
 
-    for (let memeSrc of memeSrcs) {
-      if (memeSrc.substring(0, 2) === "//") {
-        memeSrc = "http://" + memeSrc.substring(2);
-      } else {
-        memeSrc = "https://imgflip.com" + memeSrc;
-      }
+    console.log("searchText", searchText);
 
-      bot.sendPhoto(msg.chat.id, memeSrc);
+    bot.sendMessage(msg.chat.id, "Seaching meme for you...");
+
+    let memeSrcs = await fetchMeme(searchText);
+
+    if (memeSrcs && memeSrcs.length > 0) {
+      console.log("Got Search " + memeSrcs);
+
+      bot.sendMessage(
+        msg.chat.id,
+        `${msg.from.first_name}, Here are some top memes I found 👇`
+      );
+
+      memeSrcs.forEach((memeSrc) => {
+        if (memeSrc.substring(0, 2) === "//") {
+          memeSrc = "http://" + memeSrc.substring(2);
+        } else {
+          memeSrc = "https://imgflip.com" + memeSrc;
+        }
+
+        bot.sendPhoto(msg.chat.id, memeSrc);
+      });
+
+      // Send Logs
+      sendLogs(
+        {
+          Event: "Search Meme Processed",
+          Search: searchText,
+          Status: "Success",
+          User: msg.chat.username,
+        },
+        "memer_search"
+      );
+    } else {
+      bot.sendMessage(
+        msg.chat.id,
+        "Sorry " + msg.from.first_name + ", I couldn't find a meme for you 😢"
+      );
+      // Send Logs
+      sendLogs(
+        {
+          Event: "Search Meme Processed",
+          Search: searchText,
+          Status: "Error",
+          User: msg.chat.username,
+        },
+        "memer_search"
+      );
     }
-
-    // Send Logs
-    sendLogs(
-      {
-        Event: "Search Meme Processed",
-        Search: searchText,
-        Status: "Success",
-        User: msg.chat.username,
-      },
-      "memer_search"
-    );
-  } else {
-    bot.sendMessage(
-      msg.chat.id,
-      "Sorry " + msg.from.first_name + ", I couldn't find a meme for you 😢"
-    );
-    // Send Logs
-    sendLogs(
-      {
-        Event: "Search Meme Processed",
-        Search: searchText,
-        Status: "Error",
-        User: msg.chat.username,
-      },
-      "memer_search"
-    );
   }
 });
 
-bot.onText(/\/create/, async (msg) => {
+// Create
+bot.on(/\/create/, async (msg) => {
   await client.set(msg.chat.id, JSON.stringify({ state: "NONE" }));
 
   bot.sendMessage(
@@ -273,7 +262,7 @@ bot.onText(/\/create/, async (msg) => {
     "Choose do you want to create a meme from a template or custom image",
 
     {
-      reply_markup: {
+      replyMarkup: {
         inline_keyboard: [
           [
             {
@@ -294,7 +283,7 @@ bot.onText(/\/create/, async (msg) => {
 });
 
 // Handle callback queries
-bot.on("callback_query", async (callbackQuery) => {
+bot.on("callbackQuery", async (callbackQuery) => {
   const action = callbackQuery.data;
   const msg = callbackQuery.message;
 
@@ -337,7 +326,7 @@ bot.on("callback_query", async (callbackQuery) => {
       console.log("templateId", templateId);
 
       bot.sendMessage(msg.chat.id, "Great, You have a great choice!", {
-        reply_to_message_id: tempMsgMap.find((m) => m.templateId == templateId)
+        replyToMessage: tempMsgMap.find((m) => m.templateId == templateId)
           .messageId,
       });
 
@@ -374,13 +363,14 @@ bot.on("callback_query", async (callbackQuery) => {
   }
 });
 
-bot.onText(/(.*)/, async (msg, match) => {
+// Handle create meme data
+bot.on(/(.*)/, async (msg, props) => {
   try {
     const chatDataString = await client.get(msg.chat.id);
     const chatData = chatDataString ? JSON.parse(chatDataString) : null;
 
     if (chatData && chatData.state === "CREATE_TEMPLATE_SEARCH") {
-      const searchText = match[0];
+      const searchText = props.match[0];
 
       console.log("searchText", searchText);
 
@@ -413,7 +403,7 @@ bot.onText(/(.*)/, async (msg, match) => {
             }
 
             const message = await bot.sendPhoto(msg.chat.id, image, {
-              reply_markup: {
+              replyMarkup: {
                 inline_keyboard: [
                   [
                     {
@@ -432,23 +422,6 @@ bot.onText(/(.*)/, async (msg, match) => {
                 templateId: id,
                 messageId: message.message_id,
               });
-
-            // bot.sendMessage(msg.chat.id, "Do you like this one?", {
-            //   reply_markup: {
-            //     inline_keyboard: [
-            //       [
-            //         {
-            //           text: "Yes",
-            //           callback_data: "TEMPLATE_YES ID: " + id,
-            //         },
-            //         {
-            //           text: "No",
-            //           callback_data: "TEMPLATE_NO",
-            //         },
-            //       ],
-            //     ],
-            //   },
-            // });
           }
         }
 
@@ -463,11 +436,9 @@ bot.onText(/(.*)/, async (msg, match) => {
             msg.from.first_name +
             ", I couldn't find a meme template for you 😢. Please enter some other search term"
         );
-        // bot.removeTextListener(/(.*)/);
-        // await client.set(msg.chat.id, JSON.stringify({ state: "CREATE_TEMPLATE_SEARCH" }));
       }
     } else if (chatData && chatData.state === "CREATE_TEMPLATE_TOP") {
-      const text = match[0];
+      const text = props.match[0];
 
       console.log("topText", text);
 
@@ -491,7 +462,7 @@ bot.onText(/(.*)/, async (msg, match) => {
         })
       );
     } else if (chatData && chatData.state === "CREATE_TEMPLATE_BOTTOM") {
-      const text = match[0];
+      const text = props.match[0];
 
       console.log("bottomText", text);
 
@@ -550,7 +521,7 @@ bot.onText(/(.*)/, async (msg, match) => {
           msg.chat.id,
           "Do you like this meme? Share it with your friends and follow me @mtwn105 on Twitter for more cool stuff 😉. If you want to support me, consider clicking the button below 👇",
           {
-            reply_markup: {
+            replyMarkup: {
               inline_keyboard: [
                 [
                   {
@@ -578,6 +549,10 @@ bot.onText(/(.*)/, async (msg, match) => {
           "memer_create"
         );
       } else {
+        console.log("Error occured while generating meme from meme template", {
+          response,
+        });
+
         bot.sendMessage(
           msg.chat.id,
           `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
@@ -600,7 +575,7 @@ bot.onText(/(.*)/, async (msg, match) => {
         );
       }
     } else if (chatData && chatData.state === "CREATE_CUSTOM_IMAGE_TOP") {
-      const text = match[0];
+      const text = props.match[0];
 
       console.log("topText", text);
 
@@ -624,7 +599,7 @@ bot.onText(/(.*)/, async (msg, match) => {
         })
       );
     } else if (chatData && chatData.state === "CREATE_CUSTOM_IMAGE_BOTTOM") {
-      const text = match[0];
+      const text = props.match[0];
 
       console.log("bottomText", text);
 
@@ -648,13 +623,13 @@ bot.onText(/(.*)/, async (msg, match) => {
 
       await generateCustomMeme(msg, bottomText);
     } else if (
-      msg.text === "/start" &&
-      msg.text === "/help" &&
-      msg.text === "/search" &&
-      msg.text === "/create" &&
-      msg.text === "hi" &&
-      msg.text === "hey" &&
-      msg.text === "hello"
+      msg.text.includes("/start") &&
+      msg.text.includes("/help") &&
+      msg.text.includes("/search") &&
+      msg.text.includes("/create") &&
+      msg.text.includes("hi") &&
+      msg.text.includes("hey") &&
+      msg.text.includes("hello")
     ) {
       // await client.set(msg.chat.id, JSON.stringify({ state: "NONE" }));
 
@@ -696,6 +671,7 @@ bot.onText(/(.*)/, async (msg, match) => {
   }
 });
 
+// Custom meme image upload handle
 bot.on("photo", async (msg) => {
   const chatDataString = await client.get(msg.chat.id);
   const chatData = chatDataString ? JSON.parse(chatDataString) : null;
@@ -715,7 +691,274 @@ bot.on("photo", async (msg) => {
   }
 });
 
-bot.on("message", async (msg) => {
+generateCustomMeme = async (msg, bottomText) => {
+  let stream = null;
+
+  try {
+    const chatDataString = await client.get(msg.chat.id);
+    const chatData = chatDataString ? JSON.parse(chatDataString) : null;
+
+    // Get image
+    const image = chatData.image;
+
+    // Get image file from telegram using file_id
+    const fileDetails = await bot.getFile(image);
+
+    console.log("File Details", fileDetails);
+
+    if (fileDetails && fileDetails.fileLink) {
+      // Download image
+      try {
+        const res = await axios.get(fileDetails.fileLink, {
+          responseType: "arraybuffer",
+        });
+
+        fs.writeFileSync(
+          `./images/${fileDetails.file_unique_id}.jpg`,
+          Buffer.from(res.data),
+          "binary"
+        );
+
+        stream = fs.createReadStream(
+          `./images/${fileDetails.file_unique_id}.jpg`
+        );
+
+        const uploadData = new FormData();
+        uploadData.append("image", stream);
+        uploadData.append("content-type", "application/octet-stream");
+
+        const options = {
+          method: "POST",
+          url: "https://ronreiter-meme-generator.p.rapidapi.com/images",
+          headers: {
+            "x-rapidapi-host": "ronreiter-meme-generator.p.rapidapi.com",
+            "x-rapidapi-key": process.env.RAPID_API_KEY,
+            ...uploadData.getHeaders(),
+            useQueryString: true,
+          },
+          formData: {
+            image: {
+              value: stream,
+              options: {
+                filename: `${fileDetails.file_unique_id}.jpg`,
+                contentType: "application/octet-stream",
+              },
+            },
+          },
+        };
+
+        request(options, async (error, response, body) => {
+          stream.close();
+
+          if (error) {
+            console.log("Error while uploading meme", error);
+
+            bot.sendMessage(
+              msg.chat.id,
+              `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
+            );
+          } else {
+            const response = JSON.parse(body);
+
+            if (
+              (response.status == "success" && !!response.name) ||
+              (response.status == "error" && response.message == "File exists")
+            ) {
+              // Generate Meme
+              try {
+                const res = await axios.get(
+                  "https://ronreiter-meme-generator.p.rapidapi.com/meme",
+                  {
+                    headers: {
+                      "x-rapidapi-host":
+                        "ronreiter-meme-generator.p.rapidapi.com",
+                      "x-rapidapi-key": process.env.RAPID_API_KEY,
+                    },
+                    params: {
+                      meme: fileDetails.file_unique_id,
+                      top: chatData.topText,
+                      bottom: bottomText,
+                    },
+                    responseType: "arraybuffer",
+                  }
+                );
+
+                fs.writeFileSync(
+                  `./images/meme_${fileDetails.file_unique_id}.jpg`,
+                  Buffer.from(res.data),
+                  "binary"
+                );
+
+                // Send meme to user
+                bot.sendMessage(msg.chat.id, `Here is your meme 👇`);
+                bot.sendPhoto(
+                  msg.chat.id,
+                  `./images/meme_${fileDetails.file_unique_id}.jpg`
+                );
+                await client.set(
+                  msg.chat.id,
+                  JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
+                );
+
+                // If you like it do share this bot with your friends
+                // Also follow developer Amit Wani on Twitter @mtwn105
+                bot.sendMessage(
+                  msg.chat.id,
+                  "Do you like this meme? Share it with your friends and follow me @mtwn105 on Twitter for more cool stuff 😉. If you want to support me, consider clicking the button below 👇",
+                  {
+                    replyMarkup: {
+                      inline_keyboard: [
+                        [
+                          {
+                            text: "@mtwn105",
+                            url: "https://twitter.com/mtwn105",
+                          },
+                          {
+                            text: "Support",
+                            url: "https://rzp.io/l/dQtgHoQ6",
+                          },
+                        ],
+                      ],
+                    },
+                  }
+                );
+
+                // Send Logs
+                sendLogs(
+                  {
+                    Event: "Create Meme Processed",
+                    Status: "Success",
+                    Type: "Custom",
+                    User: msg.chat.username,
+                  },
+                  "memer_create"
+                );
+              } catch (err) {
+                console.log(
+                  "Error while generating custom meme from third party",
+                  err
+                );
+                bot.sendMessage(
+                  msg.chat.id,
+                  `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
+                );
+                await client.set(
+                  msg.chat.id,
+                  JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
+                );
+
+                // Send Logs
+                sendLogs(
+                  {
+                    Event: "Create Meme Processed",
+                    Status: "Error",
+                    Type: "Custom",
+                    User: msg.chat.username,
+                  },
+                  "memer_create"
+                );
+              }
+            } else {
+              console.log(
+                "Error while uploading custom meme template to third party",
+                { response }
+              );
+
+              bot.sendMessage(
+                msg.chat.id,
+                `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
+              );
+              await client.set(
+                msg.chat.id,
+                JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
+              );
+              // Send Logs
+              sendLogs(
+                {
+                  Event: "Create Meme Processed",
+                  Status: "Error",
+                  Type: "Custom",
+                  User: msg.chat.username,
+                },
+                "memer_create"
+              );
+            }
+          }
+        });
+      } catch (err) {
+        console.log("Error while generating meme", err);
+        bot.sendMessage(
+          msg.chat.id,
+          `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
+        );
+        await client.set(
+          msg.chat.id,
+          JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
+        );
+
+        // Send Logs
+        sendLogs(
+          {
+            Event: "Create Meme Processed",
+            Status: "Error",
+            Type: "Custom",
+            User: msg.chat.username,
+          },
+          "memer_create"
+        );
+      }
+    } else {
+      console.log("Error occured while downloading image: ", err);
+
+      bot.sendMessage(
+        msg.chat.id,
+        `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
+      );
+      await client.set(
+        msg.chat.id,
+        JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
+      );
+
+      // Send Logs
+      sendLogs(
+        {
+          Event: "Create Meme Processed",
+          Status: "Error",
+          Type: "Custom",
+          User: msg.chat.username,
+        },
+        "memer_create"
+      );
+    }
+  } catch (err) {
+    console.log("Error occured while creating custom meme: ", err);
+
+    bot.sendMessage(
+      msg.chat.id,
+      `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
+    );
+    await client.set(
+      msg.chat.id,
+      JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
+    );
+
+    // Send Logs
+    sendLogs(
+      {
+        Event: "Create Meme Processed",
+        Status: "Error",
+        Type: "Custom",
+        User: msg.chat.username,
+      },
+      "memer_create"
+    );
+
+    throw err;
+  }
+};
+
+// Admin messages
+bot.on("*", async (msg) => {
   if (
     msg.chat.id == process.env.MY_CHAT_ID &&
     !!msg.caption &&
@@ -766,235 +1009,4 @@ bot.on("message", async (msg) => {
   }
 });
 
-generateCustomMeme = async (msg, bottomText) => {
-  let stream = null;
-
-  try {
-    const chatDataString = await client.get(msg.chat.id);
-    const chatData = chatDataString ? JSON.parse(chatDataString) : null;
-
-    // Get image
-    const image = chatData.image;
-
-    // Get image file from telegram using file_id
-    const imagePath = await bot.downloadFile(image, "./images");
-
-    let file = fs.readFileSync(imagePath);
-
-    // Rename file to random string
-    const fileName = `${Math.random()
-      .toString(36)
-      .substring(2, 15)}${Math.random().toString(36).substring(2, 15)}.jpg`;
-
-    console.log("File name", fileName);
-
-    // Write file to disk
-    fs.writeFileSync(`./images/${fileName}`, file);
-
-    stream = fs.createReadStream(`./images/${fileName}`);
-    const uploadData = new FormData();
-    uploadData.append("image", stream);
-    uploadData.append("content-type", "application/octet-stream");
-
-    const options = {
-      method: "POST",
-      url: "https://ronreiter-meme-generator.p.rapidapi.com/images",
-      headers: {
-        "x-rapidapi-host": "ronreiter-meme-generator.p.rapidapi.com",
-        "x-rapidapi-key": process.env.RAPID_API_KEY,
-        ...uploadData.getHeaders(),
-        useQueryString: true,
-      },
-      formData: {
-        image: {
-          value: stream,
-          options: {
-            filename: fileName,
-            contentType: "application/octet-stream",
-          },
-        },
-      },
-    };
-
-    request(options, async (error, response, body) => {
-      stream.close();
-
-      if (error) {
-        bot.sendMessage(
-          msg.chat.id,
-          `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
-        );
-      } else {
-        const response = JSON.parse(body);
-
-        if (response.status == "success" && !!response.name) {
-          // Generate Meme
-          try {
-            const res = await axios.get(
-              "https://ronreiter-meme-generator.p.rapidapi.com/meme",
-              {
-                headers: {
-                  "x-rapidapi-host": "ronreiter-meme-generator.p.rapidapi.com",
-                  "x-rapidapi-key": process.env.RAPID_API_KEY,
-                },
-                params: {
-                  meme: response.name,
-                  top: chatData.topText,
-                  bottom: bottomText,
-                },
-                responseType: "arraybuffer",
-              }
-            );
-
-            fs.writeFileSync(
-              `./images/meme_${fileName}`,
-              Buffer.from(res.data),
-              "binary"
-            );
-
-            // Send meme to user
-            bot.sendMessage(msg.chat.id, `Here is your meme 👇`);
-            bot.sendPhoto(msg.chat.id, `./images/meme_${fileName}`);
-            await client.set(
-              msg.chat.id,
-              JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
-            );
-
-            // If you like it do share this bot with your friends
-            // Also follow developer Amit Wani on Twitter @mtwn105
-            bot.sendMessage(
-              msg.chat.id,
-              "Do you like this meme? Share it with your friends and follow me @mtwn105 on Twitter for more cool stuff 😉. If you want to support me, consider clicking the button below 👇",
-              {
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: "@mtwn105",
-                        url: "https://twitter.com/mtwn105",
-                      },
-                      {
-                        text: "Support",
-                        url: "https://rzp.io/l/dQtgHoQ6",
-                      },
-                    ],
-                  ],
-                },
-              }
-            );
-
-            // Send Logs
-            sendLogs(
-              {
-                Event: "Create Meme Processed",
-                Status: "Success",
-                Type: "Custom",
-                User: msg.chat.username,
-              },
-              "memer_create"
-            );
-          } catch (err) {
-            console.log(err);
-            bot.sendMessage(
-              msg.chat.id,
-              `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
-            );
-            await client.set(
-              msg.chat.id,
-              JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
-            );
-
-            // Send Logs
-            sendLogs(
-              {
-                Event: "Create Meme Processed",
-                Status: "Error",
-                Type: "Custom",
-                User: msg.chat.username,
-              },
-              "memer_create"
-            );
-          }
-        } else {
-          bot.sendMessage(
-            msg.chat.id,
-            `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
-          );
-          await client.set(
-            msg.chat.id,
-            JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
-          );
-          // Send Logs
-          sendLogs(
-            {
-              Event: "Create Meme Processed",
-              Status: "Error",
-              Type: "Custom",
-              User: msg.chat.username,
-            },
-            "memer_create"
-          );
-        }
-      }
-    });
-  } catch (err) {
-    console.log("Error occured while creating custom meme: ", err);
-
-    bot.sendMessage(
-      msg.chat.id,
-      `Sorry ${msg.from.first_name}, There was some error & I couldn't generate a meme for you 😢. Please try again 🥺`
-    );
-    await client.set(
-      msg.chat.id,
-      JSON.stringify({ state: "CREATE_TEMPLATE_FINISHED" })
-    );
-
-    // Send Logs
-    sendLogs(
-      {
-        Event: "Create Meme Processed",
-        Status: "Error",
-        Type: "Custom",
-        User: msg.chat.username,
-      },
-      "memer_create"
-    );
-
-    throw err;
-  }
-};
-
-cleanUpImages = () => {
-  // Delete files which are 5 minutes old in images folder
-  fs.readdir("./images", (err, files) => {
-    if (err) {
-      console.log(err);
-    } else {
-      files.forEach((file) => {
-        const filePath = `./images/${file}`;
-
-        fs.stat(filePath, (err, stats) => {
-          if (err) {
-            console.log(err);
-          } else {
-            if (stats.isFile()) {
-              const fileDate = new Date(stats.birthtime);
-              const now = new Date();
-              const diff = now - fileDate;
-
-              if (diff > 300000) {
-                fs.unlink(filePath, (err) => {
-                  if (err) {
-                    console.log(err);
-                  } else {
-                    console.log(`${file} deleted`);
-                  }
-                });
-              }
-            }
-          }
-        });
-      });
-    }
-  });
-};
+bot.start();

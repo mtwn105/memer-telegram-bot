@@ -57,9 +57,11 @@ module.exports = {
 
                 const imageSrc = $("#im").attr("src");
 
-                imageSrcs.push(imageSrc);
+                if (imageSrc) {
+                  imageSrcs.push(imageSrc);
 
-                top10--;
+                  top10--;
+                }
               } else {
                 const templateLink = $("#base-right > div > a.meme-link");
 
@@ -74,9 +76,11 @@ module.exports = {
 
                 const imageSrc = $("#mtm-img").attr("src");
 
-                imageSrcs.push(imageSrc);
+                if (imageSrc) {
+                  imageSrcs.push(imageSrc);
 
-                top10--;
+                  top10--;
+                }
               }
             } else if (memeUrl.includes("/i/")) {
               url = baseUrl + $(meme).attr("href");
@@ -87,9 +91,11 @@ module.exports = {
 
               const imageSrc = $("#im").attr("src");
 
-              imageSrcs.push(imageSrc);
+              if (imageSrc) {
+                imageSrcs.push(imageSrc);
 
-              top10--;
+                top10--;
+              }
             } else {
               console.log("meme does not exist");
             }
@@ -154,9 +160,11 @@ module.exports = {
 
           const templateId = $("#mtm-info > p").first().text().split(" ")[2];
 
-          imageSrcs.push({ image: imageSrc, id: templateId });
+          if (imageSrc && templateId) {
+            imageSrcs.push({ image: imageSrc, id: templateId });
 
-          top10--;
+            top10--;
+          }
         } else {
           console.log("meme template does not exist");
           //  imageSrcs.push( { image: null, id: null });
