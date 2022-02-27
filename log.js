@@ -13,10 +13,10 @@ module.exports = {
 
     try {
       axios.post(apiUrl, payload).catch((err) => {
-        console.log("Error while sending log", error);
+        console.log("Error while sending log", err);
       });
     } catch (error) {
-      console.log("Error while sending log", error);
+      console.log("Error while sending log", err);
     }
   },
 };
