@@ -714,14 +714,12 @@ generateCustomMeme = async (msg, bottomText) => {
         });
 
         fs.writeFileSync(
-          `./images/${fileDetails.file_unique_id}.jpg`,
+          `./images/${fileDetails.file_id}.jpg`,
           Buffer.from(res.data),
           "binary"
         );
 
-        stream = fs.createReadStream(
-          `./images/${fileDetails.file_unique_id}.jpg`
-        );
+        stream = fs.createReadStream(`./images/${fileDetails.file_id}.jpg`);
 
         const uploadData = new FormData();
         uploadData.append("image", stream);
@@ -740,7 +738,7 @@ generateCustomMeme = async (msg, bottomText) => {
             image: {
               value: stream,
               options: {
-                filename: `${fileDetails.file_unique_id}.jpg`,
+                filename: `${fileDetails.file_id}.jpg`,
                 contentType: "application/octet-stream",
               },
             },
@@ -775,7 +773,7 @@ generateCustomMeme = async (msg, bottomText) => {
                       "x-rapidapi-key": process.env.RAPID_API_KEY,
                     },
                     params: {
-                      meme: fileDetails.file_unique_id,
+                      meme: fileDetails.file_id,
                       top: chatData.topText,
                       bottom: bottomText,
                     },
@@ -784,7 +782,7 @@ generateCustomMeme = async (msg, bottomText) => {
                 );
 
                 fs.writeFileSync(
-                  `./images/meme_${fileDetails.file_unique_id}.jpg`,
+                  `./images/meme_${fileDetails.file_id}.jpg`,
                   Buffer.from(res.data),
                   "binary"
                 );
@@ -793,7 +791,7 @@ generateCustomMeme = async (msg, bottomText) => {
                 bot.sendMessage(msg.chat.id, `Here is your meme 👇`);
                 bot.sendPhoto(
                   msg.chat.id,
-                  `./images/meme_${fileDetails.file_unique_id}.jpg`
+                  `./images/meme_${fileDetails.file_id}.jpg`
                 );
                 await client.set(
                   msg.chat.id,
