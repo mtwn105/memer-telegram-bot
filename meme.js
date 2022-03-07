@@ -16,7 +16,6 @@ module.exports = {
       let $ = cheerio.load(response.data);
 
       // Find the first meme
-      // const meme = $("#s-results > a:nth-child(2)");
 
       const memes = $(".clearfix");
 
@@ -26,13 +25,9 @@ module.exports = {
       let top10 = 10;
 
       for (let meme of memes) {
-        // console.log(meme);
-
         try {
           // If the meme exists, click it
           if (meme && $(meme).attr("href") && top10 > 0) {
-            // console.log(meme);
-
             const memeUrl = $(meme).attr("href");
 
             if (memeUrl.includes("/meme/")) {
@@ -125,7 +120,6 @@ module.exports = {
       let $ = cheerio.load(response.data);
 
       // Find the first meme
-      // const meme = $("#s-results > a:nth-child(2)");
 
       const memes = $(".clearfix");
 
@@ -167,7 +161,6 @@ module.exports = {
           }
         } else {
           console.log("meme template does not exist");
-          //  imageSrcs.push( { image: null, id: null });
         }
       }
 

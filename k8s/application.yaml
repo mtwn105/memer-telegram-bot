@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memer-nodejs-express
+  labels:
+    app: memer-nodejs-express
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: memer-nodejs-express
+  template:
+    metadata:
+      labels:
+        app: memer-nodejs-express
+    spec:
+      containers:
+        - name: memer-nodejs-express
+          image: mtwn105/memer-bot:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: APP_ENVIRONMENT
+              valueFrom:
+                secretKeyRef:
+                  name: memer-secrets
+                  key: APP_ENVIRONMENT
+            - name: PORT
+              valueFrom:
+                secretKeyRef:
+                  name: memer-secrets
+                  key: PORT
+            - name: TELEGRAM_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: memer-secrets
+                  key: TELEGRAM_KEY
+            - name: RAPID_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: memer-secrets
+                  key: RAPID_API_KEY
+            - name: IMGFLIP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: memer-secrets
+                  key: IMGFLIP_USERNAME
+            - name: IMGFLIP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: memer-secrets
+                  key: IMGFLIP_PASSWORD
+            - name: APP_URL
+              valueFrom:
+                secretKeyRef:
+                  name: memer-secrets
+                  key: APP_URL
+            - name: GRAPH_JSON_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: memer-secrets
+                  key: GRAPH_JSON_API_KEY
+            - name: MY_CHAT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: memer-secrets
+                  key: MY_CHAT_ID
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: memer-secrets
+                  key: REDIS_URL
+          imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memer-nodejs-express
+spec:
+  selector:
+    app: memer-nodejs-express
+  ports:
+    - port: 80
+      targetPort: 3000
+  type: LoadBalancer
